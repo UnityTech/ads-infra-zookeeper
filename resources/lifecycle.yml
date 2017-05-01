@@ -1,0 +1,48 @@
+#
+# - state-machine controlling a single zookeeper broker
+# - the configuration data (e.g broker ids) is meant to be passed
+#   from the control plane and rendered into zoo.cfg
+# - please note /tmp/state will be used as our kontrol slave payload
+#
+initial: stop
+states:
+- tag: stop
+  shell: |
+    #
+    # - stop the broker
+    # - update /tmp/state
+    #
+    supervisorctl stop zookeeper
+    echo '"stopped"' > /tmp/state
+  next: 
+    - start
+    - stop
+
+- tag: start
+  shell: |
+    #
+    # - render myid + zoo.cfg via a python script
+    # - this allows us to use jinja2
+    # - $INPUT is assumed to have the proper JSON payload
+    # - transition to 'start'
+    # - start the broker
+    #
+    python render.py
+    supervisorctl start zookeeper
+    echo GOTO check | socat - $SOCKET
+  next: 
+    - check
+    - stop
+
+- tag: check
+  shell: |
+    #
+    # - simply run a periodic MNTR against the local broker
+    #
+    STATE=$(echo mntr | nc localhost 2181 | grep zk_server_state | awk '{print $2}')
+    echo '"'${STATE:=dead}'"'  > /tmp/state
+    sleep 5
+    echo GOTO check | socat - $SOCKET
+  next: 
+    - check
+    - stop
