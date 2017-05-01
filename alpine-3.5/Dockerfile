@@ -1,10 +1,8 @@
-FROM registry2.applifier.info:5005/kontrol
+FROM registry2.applifier.info:5005/ads-infra-kontrol-alpine-3.5
 
-ADD resources/ .
-
-ENV KONTROL_MODE=master,slave,verbose \
+ENV KONTROL_MODE=master,slave \
     KONTROL_PAYLOAD=/tmp/state \
-    KONTROL_CALLBACK="python callback.py" \
+    KONTROL_CALLBACK="python /home/kontrol/callback.py" \
     JAVA_VERSION_MAJOR=8 \
     JAVA_VERSION_MINOR=102 \
     JAVA_VERSION_BUILD=14 \
@@ -16,6 +14,7 @@ ENV KONTROL_MODE=master,slave,verbose \
     GLIBC_VERSION=2.23-r3 \
     LANG=C.UTF-8
 
+ADD resources/ .
 RUN set -ex && \
     apk upgrade --update && \
     apk add --update libstdc++ curl ca-certificates bash gnupg && \
@@ -51,6 +50,7 @@ RUN set -ex && \
     gpg --verify zookeeper-${ZOOKEEPER_VERSION}.tar.gz.asc && \
     tar -xzf zookeeper-${ZOOKEEPER_VERSION}.tar.gz -C /opt && \
     mkdir /var/lib/zookeeper-3.4.9 && \
+    chmod +x /home/kontrol/wrapper.sh && \
     rm -rf /opt/jdk/jre/plugin \
            /opt/jdk/jre/bin/javaws \
            /opt/jdk/jre/bin/jjs \

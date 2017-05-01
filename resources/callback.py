@@ -69,7 +69,7 @@ if __name__ == '__main__':
                 'brokers': brokers
             }
 
-            reply = _http(pod, "echo WAIT start '%s' | socat -t 60 - /tmp/sock" % json.dumps(js))
+            reply = _http(pod, "echo WAIT render '%s' | socat -t 60 - /tmp/sock" % json.dumps(js))
             assert reply == 'OK'
 
     #

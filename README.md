@@ -2,19 +2,27 @@
 
 ### Overview
 
-This project is a [**Docker**](https://www.docker.com) image packaging [**Apache Zookeeper 3.4.9**](https://zookeeper.apache.org/) together with [**Kontrol**](https://github.com/UnityTech/ads-infra-kontrol).
+This project is a [**Docker**](https://www.docker.com) image packaging
+[**Apache Zookeeper 3.4.9**](https://zookeeper.apache.org/) together with [**Kontrol**](https://github.com/UnityTech/ads-infra-kontrol).
 
-It is meant to be included in a [**Kubernetes**](https://github.com/GoogleCloudPlatform/kubernetes) pod.
+It is meant to be included in a [**Kubernetes**](https://github.com/GoogleCloudPlatform/kubernetes)
+pod.
 
-The container will both run the broker and kontrol. Kontrol runs in in master+slave mode which
-means you don't have to deploy a specific control tier to manage your ensemble (e.g it will
-automatically self-configure). The broker is managed via a state-machine whose lifecycle include a
-periodic health check. Turning the broker on/off is done via a regular supervisor job.
+The container will both run the broker and control tier. *Kontrol* runs in in
+master+slave mode which means you don't have to deploy a specific control tier to
+manage your ensemble (e.g it will automatically self-configure). The broker is
+managed via a state-machine which is transitioned via the *Kontrol* callback.
+
+### Lifecycle
+
+Turning the JVM on/off is done via a regular supervisor job. If a broker fails
+(e.g is not serving requests anymore) the automaton will attempt to re-start it. The
+health check is performed via a simple  MNTR command issued locally.
 
 ### Configuration
 
-Whenever a topology change is detected the ensemble will be gracefully turned off, re-configured and
-turned back on.
+Whenever a topology change is detected the ensemble will be gracefully turned off,
+re-configured and turned back on.
 
 ### Building the image
 

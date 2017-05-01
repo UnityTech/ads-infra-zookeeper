@@ -5,6 +5,7 @@
 # - please note /tmp/state will be used as our kontrol slave payload
 #
 initial: stop
+terminal: stop
 states:
 - tag: stop
   shell: |
@@ -15,20 +16,32 @@ states:
     supervisorctl stop zookeeper
     echo '"stopped"' > /tmp/state
   next: 
+    - render
     - start
     - stop
 
+- tag: render
+  shell: |
+    #
+    # - render myid + zoo.cfg via a python script (this allows us to use jinja2)
+    # - $INPUT is assumed to have the proper JSON payload from the control tier
+    # - transition to 'start'
+    #
+    python render.py
+    echo GOTO start | socat - $SOCKET
+  next:
+    - start
+  
 - tag: start
   shell: |
     #
-    # - render myid + zoo.cfg via a python script
-    # - this allows us to use jinja2
-    # - $INPUT is assumed to have the proper JSON payload
-    # - transition to 'start'
-    # - start the broker
+    # - start the broker and pause a bit for 5 seconds
+    # - transition to 'check'
     #
-    python render.py
+    # @todo anything else to check in there ?
+    #
     supervisorctl start zookeeper
+    sleep 5
     echo GOTO check | socat - $SOCKET
   next: 
     - check
@@ -38,11 +51,20 @@ states:
   shell: |
     #
     # - simply run a periodic MNTR against the local broker
+    # - if the reported state is okay pause and loop back in 25 seconds
+    # - otherwise stop the job and reset to the 'start' state
     #
-    STATE=$(echo mntr | nc localhost 2181 | grep zk_server_state | awk '{print $2}')
-    echo '"'${STATE:=dead}'"'  > /tmp/state
-    sleep 5
-    echo GOTO check | socat - $SOCKET
+    ZK=$(echo mntr | nc localhost 2181 | grep zk_server_state | awk '{print $2}')
+    echo '"'${ZK:=dead}'"'  > /tmp/state
+    echo broker in $ZK state
+    if [ "$ZK" == 'standalone' ] || [ "$ZK" == 'leader' ] || [ "$ZK" == 'follower' ] ; then
+      sleep 25
+      echo GOTO check | socat - $SOCKET
+    else
+      supervisorctl stop zookeeper
+      echo GOTO start | socat - $SOCKET
+    fi
   next: 
     - check
+    - start
     - stop
