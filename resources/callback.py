@@ -6,7 +6,8 @@ import json
 import requests
     
 """
-Kontrol callback managing an Apache Zookeeper ensemble.
+Kontrol callback managing an Apache Zookeeper ensemble and performing a rolling reconfiguration
+upon any topology change.
 """
 
 if __name__ == '__main__':
@@ -26,23 +27,24 @@ if __name__ == '__main__':
     #
     # - fetch the current pod snapshot ($POD) and user data attached to this
     #   cluster ($STATE), both being serialized to json
-    # - 
+    # - if $STATE is not there that's a brand new cluster (e.g default it)
     #
     pods = json.loads(os.environ['PODS'])
     brokers = {str(pod['seq']): pod['ip'] for pod in pods}
-    print >> sys.stderr, "ensemble with %d brokers" % len(brokers)
-    for pod in pods:
-        print >> sys.stderr, ' - pod #%d -> %s' % (pod['seq'], pod['payload'])
-
-    #
-    # - fetch the previous state details from $STATE
-    # - if $STATE is not there that's a brand new cluster
-    #
     state = json.loads(os.environ['STATE']) if 'STATE' in os.environ else \
     {
         'brokers': {}
     }
 
+    print >> sys.stderr, "ensemble with %d brokers" % len(brokers)
+    for pod in pods:
+        print >> sys.stderr, ' - pod #%d -> %s' % (pod['seq'], pod['payload'])
+
+    #
+    # - compare with the last known state
+    # - if there is any broker change (e.g any new reported broker and any
+    #   broker that is not responding anymore) trigger a re-configuration
+    #
     prev = state['brokers']
     if sorted(brokers) != sorted(prev):
         
@@ -51,7 +53,7 @@ if __name__ == '__main__':
         # - switch the local state machines to the 'stop' state
         #
         delta = len(brokers) - len(prev)
-        print >> sys.stderr, 'ensemble change detected (%+d brokers)' % delta
+        print >> sys.stderr, 'change detected (%+d brokers)' % delta
         replies = [_http(pod, 'echo WAIT stop | socat -t 60 - /tmp/sock') for pod in pods]
         assert all(reply == 'OK' for reply in replies)
         
@@ -69,7 +71,7 @@ if __name__ == '__main__':
                 'brokers': brokers
             }
 
-            reply = _http(pod, "echo WAIT render '%s' | socat -t 60 - /tmp/sock" % json.dumps(js))
+            reply = _http(pod, "echo WAIT start '%s' | socat -t 60 - /tmp/sock" % json.dumps(js))
             assert reply == 'OK'
 
     #

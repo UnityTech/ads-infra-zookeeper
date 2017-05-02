@@ -10,61 +10,75 @@ states:
 - tag: stop
   shell: |
     #
-    # - stop the broker
+    # - reset the failure counter
+    # - stop the broker and stay put
     # - update /tmp/state
     #
+    echo SET N 0 | socat - $SOCKET
     supervisorctl stop zookeeper
     echo '"stopped"' > /tmp/state
   next: 
-    - render
     - start
     - stop
 
-- tag: render
-  shell: |
-    #
-    # - render myid + zoo.cfg via a python script (this allows us to use jinja2)
-    # - $INPUT is assumed to have the proper JSON payload from the control tier
-    # - transition to 'start'
-    #
-    python render.py
-    echo GOTO start | socat - $SOCKET
-  next:
-    - start
-  
 - tag: start
   shell: |
     #
-    # - start the broker and pause a bit for 5 seconds
-    # - transition to 'check'
+    # - render myid + zoo.cfg via a python script
+    # - start the broker
+    # - pause a bit to let the JVM boot
     #
     # @todo anything else to check in there ?
     #
+    python render.py
     supervisorctl start zookeeper
-    sleep 5
-    echo GOTO check | socat - $SOCKET
+    sleep 5 && echo GOTO check | socat - $SOCKET
   next: 
     - check
     - stop
 
 - tag: check
   shell: |
+
     #
-    # - simply run a periodic MNTR against the local broker
-    # - if the reported state is okay pause and loop back in 25 seconds
-    # - otherwise stop the job and reset to the 'start' state
+    # - simply issue a periodic MNTR against the local broker
+    # - update /tmp/state
     #
     ZK=$(echo mntr | nc localhost 2181 | grep zk_server_state | awk '{print $2}')
     echo '"'${ZK:=dead}'"'  > /tmp/state
-    echo broker in $ZK state
     if [ "$ZK" == 'standalone' ] || [ "$ZK" == 'leader' ] || [ "$ZK" == 'follower' ] ; then
-      sleep 25
-      echo GOTO check | socat - $SOCKET
+      
+      #
+      # - the broker is functioning
+      # - reset the failure counter
+      # - pause for 25 seconds and loop back
+      #
+      echo SET N 0 | socat - $SOCKET
+      echo local broker is $ZK
+      sleep 25 && echo GOTO check | socat - $SOCKET
+    
     else
-      supervisorctl stop zookeeper
-      echo GOTO start | socat - $SOCKET
+
+      #
+      # - increment the failure counter
+      # - if we failed more than 5 times in a row revert to 'stop'
+      # - compute an exponential backoff delay using bc
+      # - cap it to one minute and loop back
+      #
+      N=$((N+1))
+      if [ $N -gt 5 ] ; then
+        echo GOTO stop | socat - $SOCKET  
+      else
+        echo SET N $N | socat - $SOCKET
+        supervisorctl restart zookeeper
+        B=$(echo "(2^$N - 1) / 2" | bc)
+        if [ $B -gt 60 ] ; then
+          B=60
+        fi
+        echo backing off for $B seconds...
+        sleep $B && echo GOTO check | socat - $SOCKET
+      fi
     fi
   next: 
     - check
-    - start
     - stop
