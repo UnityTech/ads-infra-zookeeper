@@ -16,12 +16,9 @@ JVM is managed via a state-machine which is transitioned in the *kontrol* callba
 ### Lifecycle
 
 Turning the JVM on/off is done via a regular supervisor job. If a broker fails
-(e.g is not serving requests anymore) the automaton will attempt to re-start it. The
-health check is performed via a simple  MNTR command issued locally.
-
-The initial state will render the [**telegraf**](https://github.com/influxdata/telegraf)
-configuration and include the *zookeeper* input. The broker JVM will not be started until
-we get a first *kontrol* callback.
+(e.g is not serving requests anymore) the automaton will attempt to re-start it.
+The health check is performed via a simple MNTR command issued locally. The
+broker JVM will not be started until we get a first *kontrol* callback.
 
 Whenever a topology change is detected the ensemble will be gracefully turned off,
 re-configured and turned back on. This happens in a rolling fashion.
@@ -41,6 +38,7 @@ apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
   name: zookeeper
+  namespace: test
 spec:
   replicas: 5
   template:
@@ -48,11 +46,12 @@ spec:
       labels:
         app: zookeeper
         role: broker
-        unity3d.com/master: zookeeper.default.svc
+      annotations:
+        kontrol.unity3d.com/master: zookeeper.test.svc
     spec:
       containers:
        - image: registry2.applifier.info:5005/ads-infra-zookeeper-alpine-3.5
-         name: kontrol
+         name: zookeeper
          imagePullPolicy: Always
          ports:
          - containerPort: 2181
@@ -63,6 +62,11 @@ spec:
            protocol: TCP
          - containerPort: 8000
            protocol: TCP
+         env:
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
 
 ---
 
@@ -70,6 +74,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: zookeeper
+  namespace: test
 spec:
   ports:
   - protocol: TCP
