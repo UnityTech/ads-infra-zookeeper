@@ -4,11 +4,32 @@
 #   from the control plane and rendered into zoo.cfg
 # - please note /tmp/state will be used as our kontrol slave payload
 #
-initial: stop
+initial: setup
 terminal: stop
 states:
+- tag: setup
+  shell: |
+
+    #
+    # - append the statsd + zookeeper telegraf inputs
+    # - make sure /data is there
+    # - start telegraf
+    #
+    cat <<EOT >> /etc/telegraf/telegraf.conf
+    [[inputs.statsd]]
+      service_address = "127.0.0.1:8125"
+
+    [[inputs.zookeeper]]
+      servers = ["localhost:2181"]
+    EOT
+    mkdir -p /data
+    supervisorctl start telegraf
+  next:
+    - stop
+
 - tag: stop
   shell: |
+    
     #
     # - reset the failure counter
     # - stop the broker and stay put
@@ -23,14 +44,48 @@ states:
 
 - tag: start
   shell: |
+
     #
-    # - render myid + zoo.cfg via a python script
+    # - grab the key for this broker
+    # - set the current entry in zoo.cfg as 0.0.0.0:2888:3888
+    # - this index is equal to the pod sequence index
+    # - render the zk config template with our peer bindings
+    #
+    python - <<-EOF
+    import os
+    import json
+    from jinja2 import Template
+    
+    version = os.environ['ZOOKEEPER_VERSION']
+    cfg = json.loads(os.environ['INPUT'])
+    key = cfg['key']
+    cfg['brokers'][key] = '0.0.0.0'
+    raw = \
+    """
+      tickTime=2000
+      initLimit=10
+      syncLimit=5
+      maxClientCnxns=64
+      clientPort=2181
+      autopurge.snapRetainCount=3
+      autopurge.purgeInterval=4
+      dataDir=/data
+      dataLogDir=/data
+      {%- for index in peers | sort %}
+      server.{{index}}={{peers[index]}}:2888:3888
+      {%- endfor %}
+    """
+
+    with open('/opt/zookeeper-%s/conf/zoo.cfg' % version, 'wb') as fd:
+        fd.write(Template(raw).render(peers=cfg['brokers']))
+    EOF
+    
+    #
+    # - echo the broker id in the data directory
     # - start the broker
     # - pause a bit to let the JVM boot
     #
-    # @todo anything else to check in there ?
-    #
-    python render.py
+    echo $INPUT | jq -r .key > /data/myid
     supervisorctl start zookeeper
     sleep 5 && echo GOTO check | socat - $SOCKET
   next: 

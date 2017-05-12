@@ -1,6 +1,6 @@
 FROM registry2.applifier.info:5005/ads-infra-kontrol-alpine-3.5
 
-ENV KONTROL_MODE=master,slave \
+ENV KONTROL_MODE=master,slave,verbose \
     KONTROL_PAYLOAD=/tmp/state \
     KONTROL_CALLBACK="python /home/kontrol/callback.py" \
     JAVA_VERSION_MAJOR=8 \
@@ -17,7 +17,7 @@ ENV KONTROL_MODE=master,slave \
 ADD resources/ .
 RUN set -ex && \
     apk upgrade --update && \
-    apk add --update bc libstdc++ curl ca-certificates bash gnupg && \
+    apk add --update libstdc++ curl ca-certificates bash gnupg && \
     for pkg in glibc-${GLIBC_VERSION} glibc-bin-${GLIBC_VERSION} glibc-i18n-${GLIBC_VERSION}; do curl -sSL https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/${pkg}.apk -o /tmp/${pkg}.apk; done && \
     apk add --allow-untrusted /tmp/*.apk && \
     rm -v /tmp/*.apk && \
@@ -49,8 +49,9 @@ RUN set -ex && \
     gpg --import KEYS && \
     gpg --verify zookeeper-${ZOOKEEPER_VERSION}.tar.gz.asc && \
     tar -xzf zookeeper-${ZOOKEEPER_VERSION}.tar.gz -C /opt && \
-    mkdir /var/lib/zookeeper-3.4.9 && \
-    chmod +x /home/kontrol/wrapper.sh && \
+    mkdir /var/lib/zookeeper-${ZOOKEEPER_VERSION} && \
+    chmod +x /home/kontrol/wrapped.sh && \
+    mv /home/kontrol/wrapped.sh /opt/zookeeper-${ZOOKEEPER_VERSION}/bin && \
     rm -rf /opt/jdk/jre/plugin \
            /opt/jdk/jre/bin/javaws \
            /opt/jdk/jre/bin/jjs \

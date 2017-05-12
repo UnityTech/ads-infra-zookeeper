@@ -1,17 +1,17 @@
-## Zookeeper/Kontrol pod
+## Apache Zookeeper+Kontrol pod
 
 ### Overview
 
 This project is a [**Docker**](https://www.docker.com) image packaging
-[**Apache Zookeeper 3.4.9**](https://zookeeper.apache.org/) together with [**Kontrol**](https://github.com/UnityTech/ads-infra-kontrol).
-
-It is meant to be included in a [**Kubernetes**](https://github.com/GoogleCloudPlatform/kubernetes)
+[**Apache Zookeeper 3.4.9**](https://zookeeper.apache.org/) together with
+[**Kontrol**](https://github.com/UnityTech/ads-infra-kontrol). It is meant
+to be included in a [**Kubernetes**](https://github.com/GoogleCloudPlatform/kubernetes)
 pod.
 
-The container will both run the broker and control tier. *Kontrol* runs in in
-master+slave mode which means you don't have to deploy a specific control tier to
-manage your ensemble (e.g it will automatically self-configure). The broker is
-managed via a state-machine which is transitioned via the *Kontrol* callback.
+The container will both run the JVM broker as well as its control tier: *kontrol* runs
+in master+slave mode which means you don't have to deploy a specific tier to manage your
+ensemble (e.g just deploy 1+ pods and they will automatically self-configure). Each broker
+JVM is managed via a state-machine which is transitioned in the *kontrol* callback.
 
 ### Lifecycle
 
@@ -19,10 +19,12 @@ Turning the JVM on/off is done via a regular supervisor job. If a broker fails
 (e.g is not serving requests anymore) the automaton will attempt to re-start it. The
 health check is performed via a simple  MNTR command issued locally.
 
-### Configuration
+The initial state will render the [**telegraf**](https://github.com/influxdata/telegraf)
+configuration and include the *zookeeper* input. The broker JVM will not be started until
+we get a first *kontrol* callback.
 
 Whenever a topology change is detected the ensemble will be gracefully turned off,
-re-configured and turned back on.
+re-configured and turned back on. This happens in a rolling fashion.
 
 ### Building the image
 
@@ -40,13 +42,13 @@ kind: Deployment
 metadata:
   name: zookeeper
 spec:
-  replicas: 3
+  replicas: 5
   template:
     metadata:
       labels:
         app: zookeeper
         role: broker
-        master: zookeeper.default.svc
+        unity3d.com/master: zookeeper.default.svc
     spec:
       containers:
        - image: registry2.applifier.info:5005/ads-infra-zookeeper-alpine-3.5
