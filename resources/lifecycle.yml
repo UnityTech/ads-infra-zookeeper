@@ -5,7 +5,7 @@
 # - please note /tmp/state will be used as our kontrol slave payload
 #
 initial: setup
-terminal: stop
+terminal: shutdown
 states:
 - tag: setup
   shell: |
@@ -137,3 +137,5 @@ states:
   next: 
     - check
     - stop
+
+- tag: shutdown
