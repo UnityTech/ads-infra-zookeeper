@@ -1,7 +1,7 @@
 FROM registry2.applifier.info:5005/ads-infra-kontrol-alpine-3.5:1.0.0
 
-ENV KONTROL_MODE=master,slave,verbose \
-    KONTROL_PAYLOAD=/tmp/state \
+ENV KONTROL_MODE=master,slave \
+    KONTROL_PAYLOAD=/data/state \
     KONTROL_CALLBACK="python /home/kontrol/callback.py" \
     ZOOKEEPER_VERSION=3.4.9
 

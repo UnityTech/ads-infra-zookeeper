@@ -12,7 +12,7 @@ upon any topology change.
 
 if __name__ == '__main__':
 
-    assert 'KONTROL_PORT' in os.environ, ''
+    assert 'KONTROL_PORT' in os.environ, '$KONTROL_PORT undefined (bug ?)'
     port = int(os.environ['KONTROL_PORT'])
 
     def _rpc(pod, cmd):

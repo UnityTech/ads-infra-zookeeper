@@ -2,7 +2,7 @@
 # - state-machine controlling a single zookeeper broker
 # - the configuration data (e.g broker ids) is meant to be passed
 #   from the control plane and rendered into zoo.cfg
-# - please note /tmp/state will be used as our kontrol slave payload
+# - please note /data/state will be used as our kontrol slave payload
 #
 initial: setup
 terminal: shutdown
@@ -11,17 +11,17 @@ states:
   shell: |
 
     #
-    # - append the statsd + zookeeper telegraf inputs
     # - make sure /data is there
+    # - append the statsd + zookeeper telegraf inputs
     # - start telegraf
     #
+    mkdir -p /data
     cat <<EOT >> /etc/telegraf/telegraf.conf
     [[inputs.statsd]]
       service_address = "127.0.0.1:8125"
     [[inputs.zookeeper]]
       servers = ["localhost:2181"]
     EOT
-    mkdir -p /data
     supervisorctl start telegraf
   next:
     - stop
@@ -32,11 +32,11 @@ states:
     #
     # - reset the failure counter
     # - stop the broker and stay put
-    # - update /tmp/state
+    # - update /data/state
     #
     echo SET N 0 | socat - $SOCKET
     supervisorctl stop zookeeper
-    echo '"stopped"' > /tmp/state
+    echo '"stopped"' > /data/state
   next: 
     - start
     - stop
@@ -96,10 +96,10 @@ states:
 
     #
     # - simply issue a periodic MNTR against the local broker
-    # - update /tmp/state
+    # - update /data/state
     #
     ZK=$(echo mntr | nc localhost 2181 | grep zk_server_state | awk '{print $2}')
-    echo '"'${ZK:=dead}'"'  > /tmp/state
+    echo '"'${ZK:=dead}'"'  > /data/state
     if [ "$ZK" == 'standalone' ] || [ "$ZK" == 'leader' ] || [ "$ZK" == 'follower' ] ; then
       
       #
