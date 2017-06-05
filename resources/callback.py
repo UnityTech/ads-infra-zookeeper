@@ -3,7 +3,7 @@
 import os
 import sys
 import json
-import requests
+import zerorpc
     
 """
 Kontrol callback managing an Apache Zookeeper ensemble and performing a rolling reconfiguration
@@ -12,14 +12,20 @@ upon any topology change.
 
 if __name__ == '__main__':
 
-    def _http(pod, cmd, extra={}):
+    assert 'KONTROL_PORT' in os.environ, ''
+    port = int(os.environ['KONTROL_PORT'])
+
+    def _rpc(pod, cmd):
+        
         try:
-            url = 'http://%s:8000/script' % pod['ip']
-            js = {'cmd': cmd}
-            js.update(extra)
-            reply = requests.put(url, data=json.dumps(js), headers={'Content-Type':'application/json'})
-            reply.raise_for_status()
-            return reply.text
+
+            #
+            # - use zerorpc to request a script invokation against a given pod
+            # - default on returning None upon failure
+            #
+            client = zerorpc.Client()
+            client.connect('tcp://%s:%d' % (pod['ip'], port))
+            return client.invoke(json.dumps({'cmd': cmd}))
             
         except Exception:
             return None
@@ -54,7 +60,7 @@ if __name__ == '__main__':
         #
         delta = len(brokers) - len(prev)
         print >> sys.stderr, 'change detected (%+d brokers)' % delta
-        replies = [_http(pod, 'echo WAIT stop | socat -t 60 - /tmp/sock') for pod in pods]
+        replies = [_rpc(pod, 'echo WAIT stop | socat -t 60 - /tmp/sock') for pod in pods]
         assert all(reply == 'OK' for reply in replies)
         
         #
@@ -71,7 +77,7 @@ if __name__ == '__main__':
                 'brokers': brokers
             }
 
-            reply = _http(pod, "echo WAIT start '%s' | socat -t 60 - /tmp/sock" % json.dumps(js))
+            reply = _rpc(pod, "echo WAIT start '%s' | socat -t 60 - /tmp/sock" % json.dumps(js))
             assert reply == 'OK'
 
     #
