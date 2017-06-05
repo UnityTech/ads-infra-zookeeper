@@ -18,7 +18,6 @@ states:
     cat <<EOT >> /etc/telegraf/telegraf.conf
     [[inputs.statsd]]
       service_address = "127.0.0.1:8125"
-
     [[inputs.zookeeper]]
       servers = ["localhost:2181"]
     EOT
