@@ -1,0 +1,66 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: zookeeper
+  namespace: default
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+        role: broker
+        tier: caching
+      # annotations:
+      #   kontrol.unity3d.com/master: zookeeper.default.svc
+      #   kontrol.unity3d.com/opentsdb: kairosdb.us-east-1.applifier.info
+    spec:
+      # nodeSelector:
+      #   unity3d.com/array: data
+      # affinity:
+      #   podAntiAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution: 
+      #       - labelSelector:
+      #           matchExpressions:
+      #             - key: app
+      #               operator: In
+      #               values: 
+      #               - zookeeper
+      #         topologyKey: "kubernetes.io/hostname"
+      containers:
+       - image: localhost:5000/ads-infra-zookeeper-alpine-3.5:1.0.0
+         name: zookeeper
+         imagePullPolicy: Always
+         ports:
+         - containerPort: 2181
+           protocol: TCP
+         - containerPort: 2888
+           protocol: TCP
+         - containerPort: 3888
+           protocol: TCP
+         - containerPort: 8000
+           protocol: TCP
+         env:
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  namespace: default
+spec:
+  clusterIP: None 
+  ports:
+  - protocol: TCP
+    port: 2181
+    name: zookeeper
+  - protocol: TCP
+    port: 8000
+    name: kontrol
+  selector:
+    app: zookeeper
+    role: broker
